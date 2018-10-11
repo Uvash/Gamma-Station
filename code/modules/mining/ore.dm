@@ -95,6 +95,12 @@
 	icon_state = "slag"
 	oretag = "slag"
 
+/obj/item/weapon/ore/rich_sand
+	name = "Rich sand"
+	desc = "The sand rich in minerals"
+	icon_state = "ore2"
+	oretag = "multisand"
+
 /obj/item/weapon/ore/atom_init()
 	. = ..()
 	pixel_x = rand(0,16)-8

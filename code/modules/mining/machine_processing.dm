@@ -1,5 +1,10 @@
+#define NOT_PROCESSING 0
+#define SMELTING 1
+#define COMPRESSING 2
+#define ALLOYING 3
+#define DROP 4
 /**********************Mineral processing unit console**************************/
-
+/*
 /obj/machinery/mineral/processing_unit_console
 	name = "production machine console"
 	icon = 'icons/obj/machines/mining_machines.dmi'
@@ -52,15 +57,15 @@
 		dat += "<tr><td width = 40><b>[capitalize(ore)]</b></td><td width = 30>[machine.ores_stored[ore]]</td><td width = 100><font color='"
 		if(machine.ores_processing[ore])
 			switch(machine.ores_processing[ore])
-				if(0)
+				if(NOT_PROCESSING)
 					dat += "red'>not processing"
-				if(1)
+				if(SMELTING)
 					dat += "orange'>smelting"
-				if(2)
+				if(COMPRESSING)
 					dat += "yellow'>compressing"
-				if(3)
+				if(ALLOYING)
 					dat += "gray'>alloying"
-				if(4)
+				if(DROP)
 					dat += "green'>drop"
 		else
 			dat += "red'>not processing"
@@ -102,14 +107,14 @@
 		if(!choice)
 			return FALSE
 		switch(choice)
-			if("Nothing") choice = 0
-			if("Smelting") choice = 1
-			if("Compressing") choice = 2
-			if("Alloying") choice = 3
-			if("Drop") choice = 4
+			if("Nothing") choice = NOT_PROCESSING
+			if("Smelting") choice = SMELTING
+			if("Compressing") choice = COMPRESSING
+			if("Alloying") choice = ALLOYING
+			if("Drop") choice = DROP
 		machine.ores_processing[href_list["toggle_smelting"]] = choice
 	if(href_list["toggle_power"])
-		machine.active = !machine.active
+		machine.toggle_power()
 	if(href_list["toggle_ores"])
 		show_all_ores = !show_all_ores
 	if(href_list["eject"])
@@ -152,7 +157,7 @@
 			updateUsrDialog()
 	else
 		..()
-
+*/
 /**********************Mineral processing unit**************************/
 /obj/machinery/mineral/processing_unit
 	name = "material processor" //This isn't actually a goddamn furnace, we're in space and it's processing platinum and flammable phoron...
@@ -161,29 +166,44 @@
 	density = 1
 	anchored = 1
 	light_range = 3
+	active_power_usage = 10000
+	idle_power_usage = 1000
+	dir = NORTH
 	var/obj/machinery/mineral/input = null
 	var/obj/machinery/mineral/output = null
-	var/obj/machinery/mineral/processing_unit_console/console = null
+	var/obj/machinery/computer/processing_unit_console/console = null
 	var/sheets_per_tick = 10
 	var/list/ores_processing[0]
 	var/list/ores_stored[0]
 	var/list/ore_data[0]
 	var/list/alloy_data[0]
 	var/active = 0
+	var/resourse_bonus = 1
+	var/power_coffecent = 1
 
 /obj/machinery/mineral/processing_unit/atom_init()
 	..()
 	//TODO: Ore and alloy global storage datum.
 	for(var/alloytype in typesof(/datum/alloy)-/datum/alloy)
 		alloy_data += new alloytype()
+
 	for(var/oretype in typesof(/datum/ore)-/datum/ore)
 		var/datum/ore/OD = new oretype()
 		ore_data[OD.oretag] = OD
 		ores_processing[OD.oretag] = 0
 		ores_stored[OD.oretag] = 0
+
+	component_parts = list()
+	component_parts += new /obj/item/weapon/circuitboard/material_processor(null)
+	component_parts += new /obj/item/weapon/stock_parts/capacitor(null)
+	component_parts += new /obj/item/weapon/stock_parts/micro_laser(null)
+
+	RefreshParts()
+
 	return INITIALIZE_HINT_LATELOAD
 
 /obj/machinery/mineral/processing_unit/atom_init_late()
+/*
 	//Locate our output and input machinery.
 	for (var/dir in cardinal)
 		input = locate(/obj/machinery/mineral/input, get_step(src, dir))
@@ -193,6 +213,79 @@
 		output = locate(/obj/machinery/mineral/output, get_step(src, dir))
 		if(output)
 			break
+*/
+	var/turf/T = get_step(src, dir)
+
+	if(input)
+		input.loc = T
+	else
+		input = new /obj/machinery/mineral/input(T)
+
+	src.set_dir(turn(src.dir, 180))
+	T = get_step(src, dir)
+
+	if(output)
+		output.loc = T
+	else
+		output = new /obj/machinery/mineral/output(T)
+
+/obj/machinery/mineral/processing_unit/Destroy()
+	if(input)
+		qdel(input)
+	if(output)
+		qdel(output)
+	if(console)
+		if(console.machine)
+			console.machine = null
+		console = null
+	return ..()
+
+/obj/machinery/mineral/processing_unit/RefreshParts()
+	active_power_usage = initial(active_power_usage)
+	resourse_bonus = initial(resourse_bonus)
+	sheets_per_tick = initial(sheets_per_tick)
+
+	for(var/obj/item/weapon/stock_parts/P in component_parts)
+		if(istype(P, /obj/item/weapon/stock_parts/micro_laser))
+			resourse_bonus = P.rating
+		if(istype(P, /obj/item/weapon/stock_parts/capacitor))
+			power_coffecent = P.rating
+
+	active_power_usage = active_power_usage * resourse_bonus / power_coffecent
+
+/obj/machinery/mineral/processing_unit/attackby(obj/item/weapon/W, mob/user, params)
+	rotate()
+
+/obj/machinery/mineral/processing_unit/proc/rotate()
+	if(panel_open)
+		return
+	playsound(src.loc, 'sound/items/Ratchet.ogg', 100, 1)
+	src.set_dir(turn(src.dir, 90))
+	var/turf/T = get_step(src, dir)
+	if(!T)
+		return
+
+	if(input)
+		input.loc = T
+	else
+		input = new /obj/machinery/mineral/input(T)
+
+	src.set_dir(turn(src.dir, 180))
+	T = get_step(src, dir)
+
+	if(output)
+		output.loc = T
+	else
+		output = new /obj/machinery/mineral/output(T)
+	src.set_dir(turn(src.dir, 180))
+
+/obj/machinery/mineral/processing_unit/attackby(obj/item/weapon/W, mob/user)
+	if(default_deconstruction_screwdriver(user,"furnace","furnace", W))
+		return
+	if(default_deconstruction_crowbar(W, 1))
+		return
+	if(istype(W,/obj/item/weapon/wrench))
+		rotate()
 
 /obj/machinery/mineral/processing_unit/process()
 
@@ -200,33 +293,39 @@
 
 	var/list/tick_alloys = list()
 
-	//Grab some more ore to process next tick.
-	for(var/i = 0,i<sheets_per_tick,i++)
-		var/obj/item/weapon/ore/O = locate() in input.loc
-		var/obj/item/stack/sheet/M = locate() in input.loc
-		if(M)	M.loc = output.loc
-		if(!O)	break
-		if(!isnull(ores_stored[O.oretag])) ores_stored[O.oretag]++
-		qdel(O)
+	grab_ore()
 
-	if(!active)
+	if(!can_work())
 		return
 
 	//Process our stored ores and spit out sheets.
 	var/sheets = 0
 	for(var/metal in ores_stored)
-		if(sheets >= sheets_per_tick) break
-		if(ores_stored[metal] > 0 && ores_processing[metal] != 0)
-			var/datum/ore/O = ore_data[metal]
-			if(!O) continue
-			if(ores_processing[metal] == 4) //Drop.
-				var/can_make = Clamp(ores_stored[metal],0,sheets_per_tick-sheets)
-				if(ores_stored[metal] < 1)
-					continue
-				for(var/i=0,i<can_make,i++)
+		if(sheets >= sheets_per_tick)
+			break
+
+		var/datum/ore/O = ore_data[metal]
+		if(!O)
+			continue
+
+		if(ores_stored[metal] <= 0)
+			continue
+
+		var/can_make = Clamp(ores_stored[metal],0,sheets_per_tick-sheets)
+
+		switch (ores_processing[metal])
+
+			if(NOT_PROCESSING)
+				continue
+
+			if(DROP)
+				for(var/i = 1 to can_make)
 					ores_stored[metal]--
 					new O.start(output.loc)
-			else if(ores_processing[metal] == 3 && O.alloy) //Alloying.
+
+			if(ALLOYING)
+				if(!O.alloy)
+					continue
 				for(var/datum/alloy/A in alloy_data)
 					if(A.metaltag in tick_alloys)
 						continue
@@ -236,7 +335,7 @@
 						enough_metal = 1
 						for(var/needs_metal in A.requires)
 							//Check if we're alloying the needed metal and have it stored.
-							if(ores_processing[needs_metal] != 3 || ores_stored[needs_metal] < A.requires[needs_metal])
+							if(ores_processing[needs_metal] != ALLOYING || ores_stored[needs_metal] < A.requires[needs_metal])
 								enough_metal = 0
 								break
 					if(!enough_metal)
@@ -246,35 +345,82 @@
 						for(var/needs_metal in A.requires)
 							ores_stored[needs_metal] -= A.requires[needs_metal]
 							total += A.requires[needs_metal]
-							total = max(1,round(total*A.product_mod)) //Always get at least one sheet.
+							total = max(1,round(total * A.product_mod)) * resourse_bonus //Always get at least one sheet.
 							sheets += total-1
-						for(var/i=0,i<total,i++)
-							console.points += A.points
-							new A.product(output.loc)
-			else if(ores_processing[metal] == 2 && O.compresses_to) //Compressing.
-				var/can_make = Clamp(ores_stored[metal],0,sheets_per_tick-sheets)
-				if(can_make%2>0) can_make--
-				if(!can_make || ores_stored[metal] < 1)
+						for(var/i = 1 to total)
+							console.points += A.points * resourse_bonus
+							var/obj/item/stack/sheet/N = new A.product(output.loc)
+							N.amount =  resourse_bonus
+
+			if(COMPRESSING)
+				if(!O.compresses_to)
 					continue
-				for(var/i=0,i<can_make,i+=2)
-					ores_stored[metal]-=2
-					sheets+=2
-					console.points += O.points
-					new O.compresses_to(output.loc)
-			else if(ores_processing[metal] == 1 && O.smelts_to) //Smelting.
-				var/can_make = Clamp(ores_stored[metal],0,sheets_per_tick-sheets)
-				if(!can_make || ores_stored[metal] < 1)
+				can_make = Clamp(ores_stored[metal] , 0 , sheets_per_tick-sheets)
+				if(can_make % 2 > 0)
+					can_make--
+				if(!can_make)
 					continue
-				for(var/i=0,i<can_make,i++)
+				for(var/i = 0, i < can_make, i += 2)
+					ores_stored[metal] -= 2
+					sheets += 2
+					console.points += O.points * 2 * resourse_bonus
+					var/obj/item/stack/sheet/N = new O.compresses_to(output.loc)
+					N.amount =  resourse_bonus
+
+			if(SMELTING)
+				if(!O.smelts_to)
+					continue
+				can_make = Clamp(ores_stored[metal] , 0 , sheets_per_tick-sheets)
+				if(!can_make)
+					continue
+				for(var/i = 1 to can_make)
 					ores_stored[metal]--
 					sheets++
-					console.points += O.points
-					new O.smelts_to(output.loc)
+					console.points += O.points * resourse_bonus
+					var/obj/item/stack/sheet/N = new O.smelts_to(output.loc)
+					N.amount =  resourse_bonus
+
 			else
 				ores_stored[metal]--
 				sheets++
 				new /obj/item/weapon/ore/slag(output.loc)
-		else
-			continue
+				continue
 
 	console.updateUsrDialog()
+
+/obj/machinery/mineral/processing_unit/proc/toggle_power()
+	active = !active
+	update_use_power(1 + active)
+
+/obj/machinery/mineral/processing_unit/proc/grab_ore()
+		//Grab some more ore to process next tick.
+	for(var/i = 1 to sheets_per_tick)
+		var/obj/item/weapon/ore/O = locate() in input.loc
+		var/obj/item/stack/sheet/M = locate() in input.loc
+		if(M)
+			M.loc = output.loc
+		if(!O)
+			break
+		if(!isnull(ores_stored[O.oretag])) ores_stored[O.oretag]++
+		qdel(O)
+
+/obj/machinery/mineral/processing_unit/proc/can_work()
+	if(!auto_use_power())
+		return 0
+	if(!active)
+		return 0
+	if(panel_open)
+		return 0
+	return 1
+
+/obj/item/weapon/circuitboard/material_processor
+	name = "circuit board (material processor)"
+	build_path = /obj/machinery/mineral/processing_unit
+	board_type = "machine"
+	origin_tech =  "powerstorage=3;programming=3;engineering=4;magnets=4"
+	req_components = list(
+							/obj/item/weapon/stock_parts/capacitor = 1,
+							/obj/item/weapon/stock_parts/micro_laser = 1,
+							)
+
+

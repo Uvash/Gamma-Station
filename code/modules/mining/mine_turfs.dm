@@ -587,6 +587,7 @@
 	icon_plating = "asteroid"
 	var/dug = 0       //0 = has not yet been dug, 1 = has already been dug
 	has_resources = 1
+	var/static/list/resourse_type
 
 /turf/simulated/floor/plating/airless/asteroid/atom_init()
 	var/proper_name = name
@@ -601,20 +602,50 @@
 
 /turf/simulated/floor/plating/airless/asteroid/atom_init_late()
 	updateMineralOverlays()
+	if(!resourse_type)
+		resourse_type = list(
+		"iron" = /obj/item/weapon/ore/iron,
+		"uranium" = /obj/item/weapon/ore/uranium,
+		"gold" = /obj/item/weapon/ore/gold,
+		"silver" = /obj/item/weapon/ore/silver,
+		"diamond" = /obj/item/weapon/ore/diamond,
+		"phoron" = /obj/item/weapon/ore/phoron,
+		"osmium" = /obj/item/weapon/ore/osmium,
+		"hydrogen" = /obj/item/weapon/ore/hydrogen,
+		"silicates" = /obj/item/weapon/ore/glass,
+		"carbonaceous rock" = /obj/item/weapon/ore/coal
+		)
 
 /turf/simulated/floor/plating/airless/asteroid/ex_act(severity)
 	switch(severity)
 		if(3.0)
 			return
 		if(2.0)
-			if (prob(70))
-				gets_dug()
+			if(prob(60))
+				addtimer(CALLBACK(src, .proc/drop_ore))
 		if(1.0)
-			gets_dug()
+			addtimer(CALLBACK(src, .proc/drop_ore))
+			var/datum/effect/effect/system/smoke_spread/S = new/datum/effect/effect/system/smoke_spread()
+			S.set_up(5,0,location,null)
+			S.start()
 	return
 
-/turf/simulated/floor/plating/airless/asteroid/attackby(obj/item/weapon/W, mob/user)
+/turf/simulated/floor/plating/airless/asteroid/proc/drop_ore()
+	if(!resources)
+		return
+	for(var/O in resources)
+		for(var/i = 1 to resources[O])
+			var/temp = resourse_type[O]
+			new temp(src)
+	resources = null
+	has_resources = 0
+	if(!dug)
+		dug = 1
+		icon_plating = "asteroid_dug"
+		icon_state = "asteroid_dug"
 
+/turf/simulated/floor/plating/airless/asteroid/attackby(obj/item/weapon/W, mob/user)
+	drop_ore()
 	if(!W || !user)
 		return 0
 

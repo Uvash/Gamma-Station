@@ -9,6 +9,16 @@
 	var/metaltag
 	var/points
 
+
+/datum/alloy/pglass
+	metaltag = "pglass"
+	requires = list(
+		"sand" = 1,
+		"phoron" = 1
+		)
+	product = /obj/item/stack/sheet/glass/phoronglass
+	points = 15
+
 /datum/alloy/plasteel
 	metaltag = "plasteel"
 	requires = list(
@@ -28,3 +38,4 @@
 		)
 	product = /obj/item/stack/sheet/metal
 	points = 5
+
